@@ -6,6 +6,38 @@ set -o errexit
 BACKPORTS_PACKAGES="wifi" # wwan nfc ieee802154 media
 
 
+# Check for already installed backports drivers
+function check_drivers() {
+	echo "Checking for installed backports drivers ..."
+	KERNEL_BASE=$(echo $(uname -r) | sed -n "s/\([0-9]\+\.[0-9]\+\.[0-9]\+\).*/\1/p")
+	UPDATE_DRIVERS=$(find /lib/modules/$KERNEL_BASE*/updates/drivers -name *.ko 2> /dev/null || true)
+	for DRIVER in $UPDATE_DRIVERS; do
+		DRIVER_MODINFO=$(modinfo -F version "$DRIVER" | grep -i "using backports v" || true)
+		if [ "$DRIVER_MODINFO" != "" ]; then
+			# Check for "exec format error"
+			DRIVER_NAME=$(basename "$DRIVER" .ko)
+			DRIVER_LOADED=$(lsmod | grep "^$DRIVER_NAME  " || true)
+			if [ "$DRIVER_LOADED" == "" ]; then
+				DRIVER_EXECFORMAT=$(sudo modprobe "$DRIVER_NAME" 2>&1 | grep -i "exec format error" || true)
+				if [ "$DRIVER_EXECFORMAT" != "" ]; then
+					echo "   $DRIVER_NAME - exec format error (compiled wrong)"
+					continue
+				fi
+				sudo modprobe --remove "$DRIVER_NAME" > /dev/null
+			fi
+			
+			DRIVER_FOLDER=$(echo "$DRIVER" | sed -n "s/\(.\+\/drivers\/\).*/\1/p")
+			echo "   Found: $DRIVER_FOLDER"
+			echo ""
+			return 0
+		fi
+	done
+	echo "   Did not find any valid drivers"
+	echo ""
+	return 1
+}
+
+
 # Check for linux-headers
 if [ ! -e "/lib/modules/$(uname -r)/build" ]; then
 	echo "ERROR: Linux kernel headers are not installed"
@@ -13,20 +45,8 @@ if [ ! -e "/lib/modules/$(uname -r)/build" ]; then
 fi
 
 
-# Check for already installed backports drivers, gracefully quit if found
-echo "Checking for installed backports drivers ..."
-KERNEL_BASE=$(echo $(uname -r) | sed -n "s/\([0-9]\+\.[0-9]\+\.[0-9]\+\).*/\1/p")
-UPDATE_DRIVERS=$(find /lib/modules/$KERNEL_BASE*/updates/drivers -name *.ko 2> /dev/null || true)
-for DRIVER in $UPDATE_DRIVERS; do
-	DRIVER_MODINFO=$(modinfo -F version "$DRIVER" | grep "using backports v")
-	if [ "$DRIVER_MODINFO" != "" ]; then
-		DRIVER_FOLDER=$(echo "$DRIVER" | sed -n "s/\(.\+\/drivers\/\).*/\1/p")
-		echo "   Found: $DRIVER_FOLDER"
-		exit 0
-	fi
-done
-echo "   Did not find any drivers"
-echo ""
+# Gracefully quit if valid drivers found
+check_drivers && exit 0
 
 
 # Download the latest stable (non-RC) version
@@ -34,7 +54,7 @@ cd /usr/src
 sudo rm -rf backports*/ > /dev/null
 sudo rm -f backports* > /dev/null
 echo "Finding latest stable version ..."
-BACKPORT_VER=$(wget https://www.kernel.org/pub/linux/kernel/projects/backports/stable/ -qq -O - | sed -n "s/.*href=\"\([^\"\/]\+\).*/\1/p" | egrep "v[0-9]+\.[0-9]+" | grep -v rc | sort -V | tail -1)
+BACKPORT_VER=$(wget https://www.kernel.org/pub/linux/kernel/projects/backports/stable/ -qq -O - | sed -n "s/.*href=\"\([^\"\/]\+\).*/\1/p" | egrep "v[0-9]+\.[0-9]+" | grep -vi rc | sort -V | tail -1)
 echo "   $BACKPORT_VER"
 BACKPORT_FILE=$(wget https://www.kernel.org/pub/linux/kernel/projects/backports/stable/$BACKPORT_VER/ -qq -O - | sed -n "s/.*href=\"\([^\"\/]\+\).*/\1/p" | egrep "\.tar\.(bz2|gz|xz)" | sort -V | tail -1)
 BACKPORT_URL="https://www.kernel.org/pub/linux/kernel/projects/backports/stable/$BACKPORT_VER/$BACKPORT_FILE"
@@ -71,3 +91,6 @@ for PACKAGE in $BACKPORTS_PACKAGES; do
 	sudo make install > /dev/null
 done
 echo ""
+
+# Quit with error if no valid drivers found
+check_drivers || exit 1
