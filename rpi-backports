@@ -20,7 +20,13 @@ function check_drivers() {
 			if [ "$DRIVER_LOADED" == "" ]; then
 				DRIVER_EXECFORMAT=$(sudo modprobe "$DRIVER_NAME" 2>&1 | grep -i "exec format error" || true)
 				if [ "$DRIVER_EXECFORMAT" != "" ]; then
-					echo "   $DRIVER_NAME - exec format error (compiled wrong)"
+					echo "   $DRIVER_NAME - exec format error"
+					echo "   Try running Hexxeh's rpi-update and reboot. Drivers may have been compiled for a newer kernel"
+					continue
+				fi
+				DRIVER_LOADED=$(lsmod | grep "^$DRIVER_NAME  " || true)
+				if [ "$DRIVER_LOADED" == "" ]; then
+					echo "   $DRIVER_NAMED - failed to modprobe"
 					continue
 				fi
 				sudo modprobe --remove "$DRIVER_NAME" > /dev/null
