@@ -10,33 +10,35 @@ BACKPORTS_PACKAGES="wifi" # wwan nfc ieee802154 media
 function check_drivers() {
 	echo "Checking for installed backports drivers ..."
 	KERNEL_BASE=$(echo $(uname -r) | sed -n "s/\([0-9]\+\.[0-9]\+\.[0-9]\+\).*/\1/p")
-	UPDATE_DRIVERS=$(find /lib/modules/$KERNEL_BASE*/updates/drivers -name *.ko 2> /dev/null || true)
-	for DRIVER in $UPDATE_DRIVERS; do
-		DRIVER_MODINFO=$(modinfo -F version "$DRIVER" 2>&1 | grep -i "using backports v" || true)
-		if [ "$DRIVER_MODINFO" != "" ]; then
-			# Check for "exec format error"
-			DRIVER_NAME=$(basename "$DRIVER" .ko)
-			DRIVER_LOADED=$(lsmod | grep "^$DRIVER_NAME  " || true)
-			if [ "$DRIVER_LOADED" == "" ]; then
-				DRIVER_EXECFORMAT=$(sudo modprobe "$DRIVER_NAME" 2>&1 | grep -i "exec format error" || true)
-				if [ "$DRIVER_EXECFORMAT" != "" ]; then
-					echo "   $DRIVER_NAME - exec format error"
-					echo "   Try running Hexxeh's rpi-update and reboot. Drivers may have been compiled for a newer kernel"
-					continue
-				fi
+	for DIR in $(ls -1d /lib/modules/${KERNEL_BASE}* || true); do
+		UPDATE_DRIVERS=$(find ${DIR}/updates/drivers -name *.ko 2> /dev/null || true)
+		for DRIVER in $UPDATE_DRIVERS; do
+			DRIVER_MODINFO=$(modinfo -F version "$DRIVER" 2>&1 | grep -i "using backports v" || true)
+			if [ "$DRIVER_MODINFO" != "" ]; then
+				# Check for "exec format error"
+				DRIVER_NAME=$(basename "$DRIVER" .ko)
 				DRIVER_LOADED=$(lsmod | grep "^$DRIVER_NAME  " || true)
 				if [ "$DRIVER_LOADED" == "" ]; then
-					echo "   $DRIVER_NAMED - failed to modprobe"
-					continue
+					DRIVER_EXECFORMAT=$(sudo modprobe "$DRIVER_NAME" 2>&1 | grep -i "exec format error" || true)
+					if [ "$DRIVER_EXECFORMAT" != "" ]; then
+						echo "   $DRIVER_NAME - exec format error"
+						echo "      Drivers may have been compiled for a newer kernel, try running Hexxeh's rpi-update and reboot"
+						continue
+					fi
+					DRIVER_LOADED=$(lsmod | grep "^$DRIVER_NAME  " || true)
+					if [ "$DRIVER_LOADED" == "" ]; then
+						echo "   $DRIVER_NAME - failed to modprobe"
+						continue
+					fi
+					sudo modprobe --remove "$DRIVER_NAME" > /dev/null
 				fi
-				sudo modprobe --remove "$DRIVER_NAME" > /dev/null
+				
+				DRIVER_FOLDER=$(echo "$DRIVER" | sed -n "s/\(.\+\/drivers\/\).*/\1/p")
+				echo "   Found: $DRIVER_FOLDER"
+				echo ""
+				return 0
 			fi
-			
-			DRIVER_FOLDER=$(echo "$DRIVER" | sed -n "s/\(.\+\/drivers\/\).*/\1/p")
-			echo "   Found: $DRIVER_FOLDER"
-			echo ""
-			return 0
-		fi
+		done
 	done
 	echo "   Did not find any valid drivers"
 	echo ""
