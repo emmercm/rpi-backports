@@ -103,7 +103,7 @@ echo ""
 for PACKAGE in ${BACKPORTS_PACKAGES}; do
 	echo "Building ${PACKAGE} ..."
 	sudo make defconfig-${PACKAGE} > /dev/null
-	sudo make > /dev/null
+	sudo make -j$(nproc) > /dev/null
 	sudo make install > /dev/null
 done
 echo ""
