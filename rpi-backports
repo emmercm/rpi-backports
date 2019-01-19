@@ -14,19 +14,19 @@ function check_drivers() {
 		UPDATE_DRIVERS=$(find ${DIR}/updates/drivers -name *.ko 2> /dev/null || true)
 		for DRIVER in ${UPDATE_DRIVERS}; do
 			DRIVER_MODINFO=$(modinfo -F version "${DRIVER}" 2>&1 | grep -i "using backports v" || true)
-			if [ "${DRIVER_MODINFO}" != "" ]; then
+			if [[ "${DRIVER_MODINFO}" != "" ]]; then
 				# Check for "exec format error"
 				DRIVER_NAME=$(basename "${DRIVER}" .ko)
 				DRIVER_LOADED=$(lsmod | grep "^${DRIVER_NAME}  " || true)
-				if [ "${DRIVER_LOADED}" == "" ]; then
+				if [[ "${DRIVER_LOADED}" == "" ]]; then
 					DRIVER_EXECFORMAT=$(sudo modprobe "${DRIVER_NAME}" 2>&1 | grep -i "exec format error" || true)
-					if [ "${DRIVER_EXECFORMAT}" != "" ]; then
+					if [[ "${DRIVER_EXECFORMAT}" != "" ]]; then
 						echo "   ${DRIVER_NAME} - exec format error"
 						echo "      Drivers have been compiled for a different kernel, try running Liam McLoughlin's rpi-update tool and reboot"
 						continue
 					fi
 					DRIVER_LOADED=$(lsmod | grep "^${DRIVER_NAME}  " || true)
-					if [ "${DRIVER_LOADED}" == "" ]; then
+					if [[ "${DRIVER_LOADED}" == "" ]]; then
 						echo "   ${DRIVER_NAME} - failed to modprobe"
 						continue
 					fi
@@ -47,7 +47,7 @@ function check_drivers() {
 
 
 # Check for linux-headers
-if [ ! -e "/lib/modules/$(uname -r)/build" ]; then
+if [[ ! -e "/lib/modules/$(uname -r)/build" ]]; then
 	echo "ERROR: Linux kernel headers are not installed"
 	echo ""
 	exit 1
@@ -69,7 +69,7 @@ BACKPORT_FILE=$(wget https://www.kernel.org/pub/linux/kernel/projects/backports/
 BACKPORT_URL="https://www.kernel.org/pub/linux/kernel/projects/backports/stable/${BACKPORT_VER}/${BACKPORT_FILE}"
 echo "Downloading ${BACKPORT_FILE} ..."
 sudo wget -q -O "${BACKPORT_FILE}" "${BACKPORT_URL}" > /dev/null
-if [ ! -e "${BACKPORT_FILE}" ]; then
+if [[ ! -e "${BACKPORT_FILE}" ]]; then
 	echo "   Download failed"
 	echo ""
 	exit 1
@@ -79,7 +79,7 @@ fi
 echo "Extracting ${BACKPORT_FILE} ..."
 sudo tar xf "${BACKPORT_FILE}" > /dev/null
 sudo rm -f "${BACKPORT_FILE}" > /dev/null
-if [ ! -e "${BACKPORT_FILE%.tar.*}/Makefile" ]; then
+if [[ ! -e "${BACKPORT_FILE%.tar.*}/Makefile" ]]; then
 	echo "   Extract failed"
 	echo ""
 	exit 1
